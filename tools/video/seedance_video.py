@@ -213,15 +213,20 @@ class SeedanceVideo(BaseTool):
 
     def estimate_cost(self, inputs: dict[str, Any]) -> float:
         if inputs.get("model_version", "2.0") == "2.5":
-            return round(
-                0.30
-                * (
-                    5
-                    if inputs.get("duration", "5") == "auto"
-                    else int(inputs.get("duration", "5"))
-                ),
-                2,
-            )
+            # fal bills 2.5 by tokens: w * h * seconds * 24 / 1024 at
+            # $0.0214 per 1k tokens (480p and 720p). Reference video input
+            # duration is billed too, so this covers image/text references only.
+            secs = 5 if inputs.get("duration", "5") == "auto" else int(inputs.get("duration", "5"))
+            short_side = 480 if inputs.get("resolution", "720p") == "480p" else 720
+            w, h = {
+                "21:9": (round(short_side * 21 / 9), short_side),
+                "4:3": (round(short_side * 4 / 3), short_side),
+                "1:1": (short_side, short_side),
+                "3:4": (short_side, round(short_side * 4 / 3)),
+                "9:16": (short_side, round(short_side * 16 / 9)),
+            }.get(inputs.get("aspect_ratio", "16:9"), (round(short_side * 16 / 9), short_side))
+            tokens = w * h * secs * 24 / 1024
+            return round(tokens / 1000 * 0.0214, 2)
         variant = inputs.get("model_variant", "standard")
         duration = inputs.get("duration", "5")
         secs = 5 if duration == "auto" else int(duration)
